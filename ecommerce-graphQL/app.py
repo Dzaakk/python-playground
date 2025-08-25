@@ -56,3 +56,50 @@ class Order(graphene.ObjectType):
     status = graphene.String()
     created_at = graphene.String()
 
+# == QUERIES ==
+class Query(graphene.ObjectType ):
+    """Query for Get Data"""
+
+    all_products = graphene.List(Product)
+
+    product = graphene.Field(Product, id=graphene.String(required=True))
+
+    products_by_category = graphene.List(Product, category=graphene.String(required=True))
+
+    all_orders = graphene.List(Order)
+
+    search_products = graphene.List(
+        Product,
+        keyword=graphene.String(required=True),
+        min_price=graphene.Int(),
+        max_price=graphene.Int()
+    )
+
+def resolve_all_products(self, info):
+    return products_db
+
+def resolve_product(self, info, id):
+    for product in products_db:
+        if product["id"] == id:
+            return product
+    return None
+
+def resolve_product_by_category(self, info, category):
+    return [p for p in products_db if p["category"].lower() == category.lower()]
+
+def resolve_all_orders(self, info):
+    return orders_db
+
+def resolve_search_products(self, info, keyword, min_price=None, max_price=None):
+    result = []
+    for product in products_db:
+        if keyword.lower() in product["name"].lower() or \
+            keyword.lower() in product["description"].lower():
+
+            if min_price and product["price"] < min_price: 
+                continue
+            if max_price and product["price"] >  max_price: 
+                continue
+            result.append(product)
+    return result
+    
