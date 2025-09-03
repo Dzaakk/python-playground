@@ -75,31 +75,83 @@ class Query(graphene.ObjectType ):
         max_price=graphene.Int()
     )
 
-def resolve_all_products(self, info):
-    return products_db
+    def resolve_all_products(self, info):
+        return products_db
 
-def resolve_product(self, info, id):
-    for product in products_db:
-        if product["id"] == id:
-            return product
-    return None
+    def resolve_product(self, info, id):
+        for product in products_db:
+            if product["id"] == id:
+                return product
+        return None
 
-def resolve_product_by_category(self, info, category):
-    return [p for p in products_db if p["category"].lower() == category.lower()]
+    def resolve_product_by_category(self, info, category):
+        return [p for p in products_db if p["category"].lower() == category.lower()]
 
-def resolve_all_orders(self, info):
-    return orders_db
+    def resolve_all_orders(self, info):
+        return orders_db
 
-def resolve_search_products(self, info, keyword, min_price=None, max_price=None):
-    result = []
-    for product in products_db:
-        if keyword.lower() in product["name"].lower() or \
+    def resolve_search_products(self, info, keyword, min_price=None, max_price=None):
+        result = []
+        for product in products_db:
+            if keyword.lower() in product["name"].lower() or \
             keyword.lower() in product["description"].lower():
 
-            if min_price and product["price"] < min_price: 
-                continue
-            if max_price and product["price"] >  max_price: 
-                continue
-            result.append(product)
-    return result
+                if min_price and product["price"] < min_price: 
+                    continue
+                if max_price and product["price"] >  max_price: 
+                    continue
+                result.append(product)
+        return result
+
+# == MUTATIONS ==
+class CreateOrder(graphene.Mutation):
+    """Mutation for create order"""
+    class Arguments:
+        product_id = graphene.String(required=True)
+        quantity= graphene.String(required=True)
+        customer_name= graphene.String(required=True)
     
+    order = graphene.Field(Order)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, product_id, quantity, customer_name):
+        global order_counter
+
+        product = None
+        for p in products_db:
+            if p["id"] == product_id:
+                product = p
+                break
+        
+        if not product:
+            return CreateOrder(order=None, success=False, message="Product not found")
+        
+        if product["stock"] < quantity: 
+            return CreateOrder(
+                order=None,
+                success=False,
+                message=f"Insufficient stock. Available: {product['stock']}"
+            )
+        
+        new_order = {
+            "id": str(order_counter),
+            "product_id": product_id,
+            "product_name": product["name"],
+            "quantity": quantity,
+            "total_price": product["price"] * quantity,
+            "customer_name": customer_name,
+            "status": "PENDING",
+            "created_at": datetime.now().isoformat()
+        }
+
+        product["stock"] -= quantity
+
+        orders_db.append(new_order)
+        order_counter += 1
+
+        return CreateOrder(
+            order=new_order,
+            success=True,
+            message="Order created successfully"
+        )
