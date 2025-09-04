@@ -155,3 +155,33 @@ class CreateOrder(graphene.Mutation):
             success=True,
             message="Order created successfully"
         )
+
+class UpdateProductStock(graphene.Mutation):
+    """Mutation for update stock product"""
+    class Arguments:
+        product_id = graphene.String(required=True)
+        new_stock = graphene.Int(required=True)
+    
+    product = graphene.Field(Product)
+    success = graphene.Boolean()
+    message= graphene.String()
+
+    def mutate(self, info, product_id, new_stock):
+        for product in products_db:
+            if product["id"] == product_id:
+                product["stock"] == new_stock
+                return UpdateProductStock(
+                    product=product,
+                    success=True,
+                    message="Stock updated successfully"
+                )
+        
+        return UpdateProductStock(
+            product=None,
+            success=False,
+            message="Product not found"
+        )
+
+
+
+
