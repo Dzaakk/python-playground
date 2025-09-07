@@ -1,9 +1,10 @@
-from flask import Flask
-from flask_graphql import GraphQLView
+from flask import Flask, request, jsonify
 import graphene
+from graphene import Schema
 from datetime import datetime
+import json
 
-# == Data Models ==
+# ===== DATA MODELS =====
 products_db = [
     {
         "id": "1",
@@ -64,16 +65,21 @@ class Order(graphene.ObjectType):
 class Query(graphene.ObjectType):
     """Query for Get Data"""
 
+    # Get all products
     all_products = graphene.List(Product)
 
+    # Get product by ID
     product = graphene.Field(Product, id=graphene.String(required=True))
 
+    # Get products by category
     products_by_category = graphene.List(
         Product, category=graphene.String(required=True)
     )
 
+    # Get all orders
     all_orders = graphene.List(Order)
 
+    # Search products
     search_products = graphene.List(
         Product,
         keyword=graphene.String(required=True),
@@ -90,26 +96,27 @@ class Query(graphene.ObjectType):
                 return product
         return None
 
-    def resolve_product_by_category(self, info, category):
+    def resolve_products_by_category(self, info, category):
         return [p for p in products_db if p["category"].lower() == category.lower()]
 
     def resolve_all_orders(self, info):
         return orders_db
 
     def resolve_search_products(self, info, keyword, min_price=None, max_price=None):
-        result = []
+        results = []
         for product in products_db:
+            # Search by keyword in name or description
             if (
                 keyword.lower() in product["name"].lower()
                 or keyword.lower() in product["description"].lower()
             ):
-
+                # Filter by price range if provided
                 if min_price and product["price"] < min_price:
                     continue
                 if max_price and product["price"] > max_price:
                     continue
-                result.append(product)
-        return result
+                results.append(product)
+        return results
 
 
 # == MUTATIONS ==
@@ -118,9 +125,10 @@ class CreateOrder(graphene.Mutation):
 
     class Arguments:
         product_id = graphene.String(required=True)
-        quantity = graphene.String(required=True)
+        quantity = graphene.Int(required=True)
         customer_name = graphene.String(required=True)
 
+    # Return type
     order = graphene.Field(Order)
     success = graphene.Boolean()
     message = graphene.String()
@@ -128,6 +136,7 @@ class CreateOrder(graphene.Mutation):
     def mutate(self, info, product_id, quantity, customer_name):
         global order_counter
 
+        # Find product
         product = None
         for p in products_db:
             if p["id"] == product_id:
@@ -144,6 +153,7 @@ class CreateOrder(graphene.Mutation):
                 message=f"Insufficient stock. Available: {product['stock']}",
             )
 
+        # Create order
         new_order = {
             "id": str(order_counter),
             "product_id": product_id,
@@ -155,8 +165,10 @@ class CreateOrder(graphene.Mutation):
             "created_at": datetime.now().isoformat(),
         }
 
+        # Update stock
         product["stock"] -= quantity
 
+        # Save order
         orders_db.append(new_order)
         order_counter += 1
 
@@ -179,7 +191,7 @@ class UpdateProductStock(graphene.Mutation):
     def mutate(self, info, product_id, new_stock):
         for product in products_db:
             if product["id"] == product_id:
-                product["stock"] == new_stock
+                product["stock"] = new_stock
                 return UpdateProductStock(
                     product=product, success=True, message="Stock updated successfully"
                 )
@@ -224,14 +236,107 @@ class Mutation(graphene.ObjectType):
     add_product = AddProduct.Field()
 
 
+# ===== FLASK APP SETUP =====
 app = Flask(__name__)
 app.debug = True
 
+# Create GraphQL schema
 schema = graphene.Schema(query=Query, mutation=Mutation)
 
-app.add_url_rule(
-    "/graphql", view_func=GraphQLView.as_view("graphql", schema=schema, graphiql=True)
-)
+
+# Custom GraphQL endpoint handler
+@app.route("/graphql", methods=["GET", "POST", "OPTIONS"])
+def graphql_server():
+    if request.method == "OPTIONS":
+        # Handle CORS preflight
+        response = jsonify({"status": "ok"})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return response
+
+    # Get query from request
+    if request.method == "GET":
+        query = request.args.get("query")
+        variables = request.args.get("variables")
+    else:
+        data = request.get_json()
+        query = data.get("query") if data else None
+        variables = data.get("variables") if data else None
+
+    if not query:
+        # Return GraphiQL interface for GET requests without query
+        if request.method == "GET":
+            return GRAPHIQL_HTML, 200, {"Content-Type": "text/html"}
+        return jsonify({"error": "No query provided"}), 400
+
+    # Parse variables if string
+    if variables and isinstance(variables, str):
+        try:
+            variables = json.loads(variables)
+        except:
+            variables = None
+
+    # Execute query
+    try:
+        result = schema.execute(query, variable_values=variables)
+
+        response_data = {"data": result.data}
+
+        if result.errors:
+            response_data["errors"] = [str(error) for error in result.errors]
+
+        response = jsonify(response_data)
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# GraphiQL HTML interface
+GRAPHIQL_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GraphiQL</title>
+    <link href="https://unpkg.com/graphiql@2.4.7/graphiql.min.css" rel="stylesheet" />
+    <style>
+        body { height: 100vh; margin: 0; }
+        #graphiql { height: 100%; }
+    </style>
+</head>
+<body>
+    <div id="graphiql">Loading...</div>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/graphiql@2.4.7/graphiql.min.js"></script>
+    <script>
+        const fetcher = GraphiQL.createFetcher({
+            url: '/graphql',
+        });
+        
+        const root = ReactDOM.createRoot(document.getElementById('graphiql'));
+        root.render(
+            React.createElement(GraphiQL, {
+                fetcher: fetcher,
+                defaultQuery: `# Welcome to GraphiQL
+#
+# Try this query:
+{
+  allProducts {
+    id
+    name
+    price
+    stock
+  }
+}`,
+            })
+        );
+    </script>
+</body>
+</html>
+"""
 
 
 @app.route("/")
@@ -253,9 +358,10 @@ def index():
         <li>updateProductStock - Update product stock</li>
         <li>addProduct - Add new product</li>
     </ul>
-"""
+    """
 
 
 if __name__ == "__main__":
     print("GraphQL Server running at http://localhost:5000/graphql")
+    print("GraphiQL interface available at http://localhost:5000/graphql")
     app.run(port=5000)
