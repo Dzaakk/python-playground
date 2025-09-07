@@ -214,3 +214,48 @@ class AddProduct(graphene.Mutation):
         products_db.append(new_product)
 
         return AddProduct(product=new_product, success=True)
+
+
+class Mutation(graphene.ObjectType):
+    """Root Mutation"""
+
+    create_order = CreateOrder.Field()
+    update_product_stock = UpdateProductStock.Field()
+    add_product = AddProduct.Field()
+
+
+app = Flask(__name__)
+app.debug = True
+
+schema = graphene.Schema(query=Query, mutation=Mutation)
+
+app.add_url_rule(
+    "/graphql", view_func=GraphQLView.as_view("graphql", schema=schema, graphiql=True)
+)
+
+
+@app.route("/")
+def index():
+    return """
+    <h1>GraphQL E-Commerce API</h1>
+    <p>Access GraphQL Playground at: <a href="/graphql">/graphql</a></p>
+    <h3>Available Queries:</h3>
+    <ul>
+        <li>allProducts - Get all products</li>
+        <li>product(id) - Get product by ID</li>
+        <li>productsByCategory(category) - Get products by category</li>
+        <li>searchProducts(keyword, minPrice, maxPrice) - Search products</li>
+        <li>allOrders - Get all orders</li>
+    </ul>
+    <h3>Available Mutations:</h3>
+    <ul>
+        <li>createOrder - Create new order</li>
+        <li>updateProductStock - Update product stock</li>
+        <li>addProduct - Add new product</li>
+    </ul>
+"""
+
+
+if __name__ == "__main__":
+    print("GraphQL Server running at http://localhost:5000/graphql")
+    app.run(port=5000)
