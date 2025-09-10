@@ -2,8 +2,6 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-# Create your models here.
-
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -21,7 +19,8 @@ class Category(models.Model):
 
 class Post(models.Model):
     STATUS_CHOICES = [
-        ("draft", "Draft")("published", "Published"),
+        ("draft", "Draft"),
+        ("published", "Published"),
     ]
 
     title = models.CharField(max_length=200)
@@ -51,7 +50,7 @@ class Post(models.Model):
         super().save(*args, **kwargs)
 
 
-class Coment(models.Model):
+class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
