@@ -37,7 +37,7 @@ class CategoryBase(BaseModel):
     description: Optional[str] = None
 
 
-class CategoryResponse(CategoryResponse):
+class CategoryResponse(CategoryBase):
     id: int
     created_at: datetime
 
@@ -99,3 +99,50 @@ class CommentResponse(CommentBase):
 
     class Config:
         from_attributes = True
+
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Blog API with FastAPI and Django ORM",
+        "endpoints": {
+            "posts": "/api/posts/",
+            "categories": "/api/categories/",
+            "comments": "/api/comments/",
+            "docs": "/docs",
+        },
+    }
+
+
+@app.get("/api/categories/", response_model=List[CategoryResponse])
+async def get_categories():
+    categories = Category.objects.all()
+    return [
+        CategoryResponse(
+            id=cat.id,
+            name=cat.name,
+            slug=cat.slug,
+            description=cat.description,
+            created_at=cat.created_at,
+        )
+        for cat in categories
+    ]
+
+
+@app.post("/api/categories/", response_model=CategoryResponse)
+async def create_category(category: CategoryBase):
+    try:
+        new_category = Category.objects.create(
+            name=category.name,
+            slug=category.slug,
+            description=category.description,
+        )
+        return CategoryResponse(
+            id=new_category.id,
+            name=new_category.name,
+            slug=new_category.slug,
+            description=new_category.description,
+            created_at=new_category.created_at,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
