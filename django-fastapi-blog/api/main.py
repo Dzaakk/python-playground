@@ -146,3 +146,41 @@ async def create_category(category: CategoryBase):
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# Post endpoints
+@app.get("/api/posts/", response_model=List[PostResponse])
+async def get_posts(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    category: Optional[str] = Query(None, description="Filter by categoyr slug"),
+    search: Optional[str] = Query(None, description="Filter by title and content"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    posts = Post.objects.select_related("author", "category").all()
+
+    if status:
+        posts = posts.filter(status=status)
+    if category:
+        posts = posts.filter(category_slug=category)
+    if search:
+        posts = posts.filter(Q(title__icontains=search) | Q(content__icontains=search))
+
+    posts = posts[offset : offset + limit]
+
+    return [
+        PostResponse(
+            id=post.id,
+            title=post.title,
+            slug=post.slug,
+            author=post.author.username,
+            category=post.category.name if post.categiry else None,
+            content=post.content,
+            excerpt=post.excerpt,
+            status=post.status,
+            created_at=post.created_at,
+            updated_at=post.updated_at,
+            published_at=post.published_at,
+        )
+        for post in posts
+    ]
