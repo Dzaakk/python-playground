@@ -184,3 +184,63 @@ async def get_posts(
         )
         for post in posts
     ]
+
+
+@app.get("/api/posts/{post_id}", response_model=PostResponse)
+async def get_post(post_id: int):
+    try:
+        post = Post.objects.select_related("author", "category").get(id=post_id)
+        return PostResponse(
+            id=post.id,
+            title=post.title,
+            slug=post.slug,
+            author=post.author.username,
+            category=post.category.name if post.categiry else None,
+            content=post.content,
+            excerpt=post.excerpt,
+            status=post.status,
+            created_at=post.created_at,
+            updated_at=post.updated_at,
+            published_at=post.published_at,
+        )
+    except Post.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+
+@app.post("/api/posts", response_model=PostResponse)
+async def create_post(post: PostCreate):
+    try:
+        author = User.objects.get(id=post.author_id)
+        category = None
+        if post.category_id:
+            category = Category.objects.get(id=post.category_id)
+
+        new_post = Post.objects.create(
+            title=post.title,
+            slug=post.slug,
+            author=author,
+            category=category,
+            content=post.content,
+            excerpt=post.excerpt,
+            status=post.status,
+        )
+
+        return PostResponse(
+            id=new_post.id,
+            title=new_post.title,
+            slug=new_post.slug,
+            author=new_post.author.username,
+            category=new_post.category.name if post.categiry else None,
+            content=new_post.content,
+            excerpt=new_post.excerpt,
+            status=new_post.status,
+            created_at=new_post.created_at,
+            updated_at=new_post.updated_at,
+            published_at=new_post.published_at,
+        )
+    except User.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Author not found")
+    except Category.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Category not found")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
