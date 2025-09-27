@@ -244,3 +244,49 @@ async def create_post(post: PostCreate):
         raise HTTPException(status_code=404, detail="Category not found")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/posts/{post_id}", response_model=PostResponse)
+async def update_post(post_id: int, post_update: PostUpdate):
+    try:
+        post = Post.objects.get(id=post_id)
+        if post_update.title:
+            post.title = post_update.title
+        if post_update.content:
+            post.content = post_update.content
+        if post_update.excerpt:
+            post.excerpt = post_update.excerpt
+        if post_update.status:
+            post.status = post_update.status
+        if post_update.category_id:
+            post.category = Category.objects.get(id=post_update.category_id)
+
+        post.save()
+
+        return PostResponse(
+            id=post.id,
+            title=post.title,
+            slug=post.slug,
+            author=post.author.username,
+            category=post.category.name if post.categiry else None,
+            content=post.content,
+            excerpt=post.excerpt,
+            status=post.status,
+            created_at=post.created_at,
+            updated_at=post.updated_at,
+            published_at=post.published_at,
+        )
+    except Post.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Post not found")
+    except Category.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+
+@app.delete("/api/posts/{post_id}")
+async def delete_post(post_id: int):
+    try:
+        post = Post.objects.get(id=post_id)
+        post.delete()
+        return {"message": "Post deleted successfully"}
+    except Post.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Post not found")
