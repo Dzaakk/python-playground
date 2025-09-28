@@ -290,3 +290,42 @@ async def delete_post(post_id: int):
         return {"message": "Post deleted successfully"}
     except Post.DoesNotExist:
         raise HTTPException(status_code=404, detail="Post not found")
+
+
+# Comment endpoints
+@app.get("/api/posts/{post_id}/comments", response_model == List[CommentResponse])
+async def get_post_comments(post_id: int):
+    comments = Comment.objects.filter(post_id=post_id, is_active=True).select_related(
+        "author"
+    )
+    return [
+        CommentResponse(
+            id=comment.id,
+            content=comment.content,
+            author=comment.author,
+            created_at=comment.created_at,
+        )
+        for comment in comments
+    ]
+
+
+@app.post("/api/comments/", response_model=CommentResponse)
+async def create_comment(comment: CommentCreate):
+    try:
+        post = Post.objects.get(id=comment.post_id)
+        author = User.objects.get(id=comment.author_id)
+
+        new_comment = Comment.objects.create(
+            post=post, author=author, content=comment.content
+        )
+
+        return CommentResponse(
+            id=new_comment.id,
+            content=new_comment.content,
+            author=new_comment.author,
+            created_at=new_comment.created_at,
+        )
+    except Post.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Post not found")
+    except User.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Author not found")
